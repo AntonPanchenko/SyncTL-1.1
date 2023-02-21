@@ -1,0 +1,83 @@
+first $(Platform) then $(Configuration)
+
+1. make it lockfree
+	put calls to synchronization into lock guards or something in order for it
+	to correctly unlock on exception thrown
+	-- throwing there is probably a bad idea
+	-----absolutely bad, it breaks linearizability.
+	each entryy must have it's own read-write lock.
+	on addition/removal of entries in the list/queue/tree all the neighbour elements must be locked.
+	-probably an approach
+		to wrap those pairs or pointes, count, e.t.c not big parts of classes into separate
+		structures, provide correct alignment and try to work with it with atomic instructions
+		(test and set, compare and swap, fetch and add)
+2. add another synchronization primitives. (those in C++ standard at first)
+	--many of them, in separate lock classes.
+DONE--- 3. must not be link to QReadWriteLock (dependency on Qt)
+	at least isolate it #ifdef USING_QT or something..
+DONE--- 4. make it a library (lib) in a separate project
+	4.1 - debug information. was edit and continue (ZI).
+	now I change it to Z7 (C7 compatible) bot in lib and test project
+	and turn off Just My code debugging 
+		https://learn.microsoft.com/en-us/visualstudio/debugger/just-my-code?view=vs-2022
+		from log
+			Warning: Full debug symbol generation from partial PDBs is not supported for static libraries.
+		symbols may probably "stomp each other", naming must be reviewed.
+5. add move semantics, emplace
+seems to be DONE --- 6. exception class. must be rebuilt to fit in a register.
+	(message, file, line store in thread local storage)
+   or it must be thrown by reference or pointer, exception object must be static.
+7. error reporting.
+	- must be available for 
+	1. desktop application for all available platforms
+	2. server
+	- must include
+		- basic exception class
+		- throw and catch expressions macro to throw exception via ptr or what, not by value.
+			this avoiding using heap allocation and copying while handling. this must be lock-free.
+		- message strings.
+8. to remove an element or the whole sequence from the list/tree, insert a dummy instead, 
+   operate on element/sequence on dedicated thread and then put it back instead of dummy.
+9. review uniform allocator locking
+	lock separate sections.
+10. bring it all to cmake
+11. make it crossplatform
+DONE--- 12. deadlock on timers deinitialization
+	on init_deinit_lock
+13. make timers crossplatform
+14. add debug messaging to synchronization
+15. copy exceptions to main thread.
+16. allocate exception pointer (those are to be thrown) in separate allocator.
+	exceptions themselves must be static.
+17. Slim read write lock cannot be used in library. it can synchronize threads in a single process.
+	https://learn.microsoft.com/en-us/windows/win32/sync/slim-reader-writer--srw--locks
+18. release must not contain stack walker
+	SyncTL include directories:
+	release	//must not contain stack walker
+		$(VC_IncludePath);$(WindowsSDK_IncludePath);$(ProjectDir);
+	debug
+		$(VC_IncludePath);$(WindowsSDK_IncludePath);$(ProjectDir);$(ProjectDir)..\..\StackWalker-master\Main\StackWalker
+DONE (seems to be) --- 19. deadlocks on deinitializatoin seem to be caused by destructor call order. 
+	(since locks are members)
+	locks allocation and initialization must be reviewed.
+19. separate locking for linking and data in containers.
+
+locking mechanisms:
+	WinAPI sychonization objects
+	posix synchronization objects (pthread_read_write_lock, mutex_t, ..)
+	standard C++ synch primitives, <thread>, <atomic>
+		https://en.cppreference.com/w/cpp/thread/shared_mutex - this is read-write lock. since C++17
+		std::recursive_mutex - since C++11 defined in <mutex>
+
+using separate uniform allocators for each thread? (economy on synchronization)
+--bad idea since entries will be used cross-thread
+
+review uniform allocator synchronization
+
+the solution with pointers to deleted objects is probably in delayed deletion of disposed objects.
+this is where uniform heap or any other memory manager can help.
+the idea is that whatever object i refer, whether it is still in the heap or not,
+i can refer to it for a while and can have a guaranty that it is valid, while it can be
+no more in the collection
+reference count?.
+I must be sure that if pointer to object is not null, than the object exists.

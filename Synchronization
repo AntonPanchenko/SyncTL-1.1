@@ -1,0 +1,117 @@
+#ifndef SYNCHRONIZATION_H_INCLUDED
+#define SYNCHRONIZATION_H_INCLUDED
+
+#if ((defined WIN64) || (defined WIN32))
+#define WINDOWS
+#endif	//WIN32 || WIN64
+
+#ifdef WINDOWS
+#include <Windows.h>
+#endif //WIN32
+
+#include "Utils.h"
+#ifdef QT_VERSION
+#include <qglobal.h>
+#endif
+
+namespace SyncTL
+{
+
+enum
+{
+	SYNCHRONIZATION_ERROR_OK = 0,
+	SYNCHRONIZATION_ERROR_OPERATION_CANCELLED  = SYNCHRONIZATION_ERROR_BASE,
+	SYNCHRONIZATION_ERROR_CANNOT_GET_LOCK_FOR_READ,
+	SYNCHRONIZATION_ERROR_CANNOT_GET_LOCK_FOR_WRITE,
+	SYNCHRONIZATION_ERROR_CANNOT_RELEASE_LOCK,
+	SYNCHRONIZATION_ERROR_CANNOT_CREATE_LOCK,
+	SYNCHRONIZATION_ERROR_CANNOT_CREATE_EVENT
+};
+
+class BasicReadWriteLock
+{
+public:
+	virtual ~BasicReadWriteLock()
+	{}
+	virtual bool LockForRead() = 0;
+	virtual bool LockForWrite() = 0;
+	virtual bool TryLockForRead(unsigned int timeout_millisoconds = 0) = 0;
+	virtual bool TryLockForWrite(unsigned int timeout_milliseconds = 0) = 0;
+	virtual void Unlock() = 0;
+};
+
+//#ifdef QT_VERSION
+
+class QReadWriteLock;
+
+class QtReadWriteLock : public BasicReadWriteLock
+{
+public:
+	QtReadWriteLock(bool recursive = true);
+	virtual ~QtReadWriteLock();
+	bool LockForRead();
+	bool LockForWrite();
+	bool TryLockForRead(unsigned int timeout_milliseconds = 0);
+	bool TryLockForWrite(unsigned int timeout_milliseconds = 0);
+	void Unlock();
+protected:
+	QReadWriteLock* m_lock;
+};
+
+//if no qt, reimplement read write lock through winapi or posix or whatever else
+#ifdef QT_VERSION
+#define ReadWriteLock QtReadWriteLock
+#else
+#define ReadWRiteLock WinAPIReadWriteLock
+#endif
+
+enum
+{
+	SYNCH_WAIT_OK = 0,
+	SYNCH_WAIT_TIMEOUT = 1,
+	SYNCH_WAIT_ABANDONED = 2,
+	SYNCH_WAIT_FAILED = 3
+};
+
+class SynchronizationObject
+{
+public:
+	virtual ~SynchronizationObject() {}
+	virtual unsigned int /*error code*/ Wait(unsigned int timeout_milliseconds = INFINITE) = 0;
+	unsigned int MapSystemErrorToError(unsigned int sys_error);
+};
+
+class Event: public SynchronizationObject
+{
+public:
+	Event(bool is_manual_reset = true, bool initial_state = false);
+	virtual ~Event();
+	void SetEvent();
+	void ClearEvent();
+	unsigned int /*error code*/ Wait(unsigned int timeout_milliseconds = INFINITE);
+protected:
+#ifdef WINDOWS
+	typedef HANDLE EventHandle;
+	EventHandle m_handle;
+#endif //WINDOWS
+};
+
+class Mutex: public SynchronizationObject
+{
+public:
+	Mutex();
+	virtual ~Mutex();
+	unsigned int /*error code*/ Wait(unsigned int timeout_milliseconds = INFINITE);
+	unsigned int /*error code*/ Release();
+protected:
+#ifdef WINDOWS
+	typedef HANDLE MutexHandle;
+	MutexHandle m_handle;
+#endif //WINDOW
+};
+
+//#endif //QT_VERSION
+
+} //end namespace SyncTL
+
+#endif //SYNCHRONIZATION_H_INCLUDED
